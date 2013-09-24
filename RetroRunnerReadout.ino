@@ -599,6 +599,7 @@ const char startup_text_04[] PROGMEM = "Set";
 const char startup_text_05[] PROGMEM = "Go!";
 
 
+
 #if defined(DEBUG_MODE)
 //TODO: Rename this
 const char loop_text_DEBUG_STATS[] PROGMEM = DEBUG_STATS_REPLACE;
@@ -774,6 +775,7 @@ const char pre_names_text_01[] PROGMEM = "Run";
 const char pre_names_text_02[] PROGMEM = "Push";
 const char pre_names_text_03[] PROGMEM = "Go";
 const char pre_names_text_04[] PROGMEM = "Harder";
+const char pre_names_text_05[] PROGMEM = "Onya";
 
 
 PROGMEM const char * const pre_names_texts[] =
@@ -783,6 +785,7 @@ PROGMEM const char * const pre_names_texts[] =
   pre_names_text_02,
   pre_names_text_03,
   pre_names_text_04,
+  pre_names_text_05,
 };
 #define PRE_NAMES_TEXTS_COUNT ( sizeof(pre_names_texts)/sizeof(pre_names_texts[0]) )
 
@@ -820,7 +823,7 @@ const char motivates_text_26[] PROGMEM = "Pain now...\nBeer Later";
 //const char motivates_text_27[] PROGMEM = "Do my eMitted photons push her faster?";
 //const char motivates_text_28[] PROGMEM = "These Messages Not brought to you by the letter 'kay'";
 const char motivates_text_29[] PROGMEM = "I hope you\nhaven't seen\nALL these\nMessages....";
-const char motivates_text_30[] PROGMEM = "Running'ss a\nmental sport.\nWe're insane!!";
+const char motivates_text_30[] PROGMEM = "Running's a\nmental sport.\nWe're insane!!";
 const char motivates_text_31[] PROGMEM = "Friends Don't\nLet Friends\nRun Marathons";
 //const char motivates_text_32[] PROGMEM = "Hey!\nI just passed you!";
 //const char motivates_text_33[] PROGMEM = "I run like a girl - try to keep up";
@@ -1063,7 +1066,7 @@ void replace_special_strings(const char * const text, char * const replace_text,
     }
     else
     {
-      strcpy (replace_text,"Finished");
+      strcpy (replace_text,"Finished\n :)");
     }
   }
 #endif //defined(USE_ANT_SDM)
@@ -1338,8 +1341,13 @@ void adjust_string(const char * text, char * out_text, unsigned int out_text_siz
 
 
 #if defined(USE_DISPLAY_EPAPER)
+//TODO: Look at #pragma GCC optimize ("string"...)
 //No wrapping (respects incoming '\n's). Will reduce text to fit longest line
-void print_epaper_draw_chars( const char * text, const unsigned int width, const unsigned int height )
+void print_epaper_draw_chars( const char * text,
+		const unsigned int width,
+		const unsigned int height,
+		const unsigned int segment_start_row = 0, //The start row being drawn to
+		      unsigned int segment_num_rows  = 0)
 {
 #define MAX_NUM_LINES (7)
   unsigned char line_lengths[MAX_NUM_LINES]; //Anymore than MAX_NUM_LINES will have issues.....
@@ -1347,6 +1355,11 @@ void print_epaper_draw_chars( const char * text, const unsigned int width, const
   unsigned int num_lines = 0;
   unsigned int max_line_length = 0;
   unsigned int line_start_j = 0;
+
+  if(segment_num_rows == 0)
+  {
+	  segment_num_rows = height;
+  }
 
   //SERIAL_DEBUG_PRINTLN_F("print_epaper_draw_chars()");
 
@@ -1459,7 +1472,30 @@ void print_epaper_draw_chars( const char * text, const unsigned int width, const
       //SERIAL_DEBUG_PRINT_F(",");
       //SERIAL_DEBUG_PRINT( y );
       //SERIAL_DEBUG_PRINT_F("]");
-      G_EPD.drawChar(x, y, text[j], EPD_GFX::BLACK, EPD_GFX::WHITE, char_size_multiplier );
+
+      //Optimise out a few calls to save wasted processing for non-displaying segments
+      const unsigned int y_end_char = y + char_size_multiplier * (EPD_GFX_CHAR_BASE_HEIGHT + 1);
+      const unsigned int segment_end_row = segment_start_row + segment_num_rows;
+      boolean draw_char = true;
+      if(y > segment_end_row)
+      {
+    	  //Char starts on a later segment
+    	  draw_char = false;
+      }
+      if(y_end_char < segment_start_row)
+	  {
+    	  //Char finished on an earlier segment
+		  draw_char = false;
+	  }
+
+      if(draw_char)
+      {
+    	  G_EPD.drawChar(x, y, text[j], EPD_GFX::BLACK, EPD_GFX::WHITE, char_size_multiplier );
+      }
+      else
+      {
+    	  //Skipping this char...
+      }
 
       x += (char_size_multiplier * (EPD_GFX_CHAR_BASE_WIDTH + 1));
     }
@@ -1577,9 +1613,10 @@ void print_epaper( const char * text )
         for(unsigned int s=0; s < segments; s++)
         {
             G_EPD.set_current_segment(s);
+            int start_row = s*seg_h;
 
             //Write text across segments
-            print_epaper_draw_chars( text, w, h );
+            print_epaper_draw_chars( text, w, h, start_row, seg_h );
 
 #if defined(DEBUG_OVERLAY)
             if(s==(segments-2))
@@ -1854,63 +1891,7 @@ void process_packet( ANT_Packet * packet )
 // ******************************  Loop functions  **************************************************
 // **************************************************************************************************
 
-/*static*/ int loop_display_counter = 0;
 
-void loop_display()
-{
-
-
-  char text[MAX_CHARS_TO_DISPLAY_STR];
-
-  //SERIAL_DEBUG_PRINT( loop_display_counter );
-  //SERIAL_DEBUG_PRINT_F(" | ");
-  //SERIAL_DEBUG_PRINT( LOOP_TEXTS_COUNT );
-  //SERIAL_DEBUG_PRINT_F(" | ");
-  //SERIAL_DEBUG_PRINTLN( loop_display_counter % LOOP_TEXTS_COUNT );
-
-  //Pull a string from the loop texts
-  //These are one per loop() and some of them get replaced if they are magic texts
-  get_text_from_pm_char_ptr_array(text, MAX_CHARS_TO_DISPLAY_STR, loop_texts, LOOP_TEXTS_COUNT, loop_display_counter++);
-
-#define CALL_LOOP_ANTPLUS_IN_SLEEP_PERIOD_MS (1000)
-
-#if defined(USE_DISPLAY_EPAPER)
-#if defined(USE_LOGO)
-    if((logo_insert_counter++ % LOGO_INSERT_MESSAGE_COUNT) == 0)
-    {
-      print_epaper_logo();
-      //Execute extra loop_antplus to clear the buffers
-      my_delay_function(DISPLAY_DURATION_MS, loop_antplus, CALL_LOOP_ANTPLUS_IN_SLEEP_PERIOD_MS );
-    }
-#endif //defined(USE_LOGO)
-#endif //defined(USE_DISPLAY_EPAPER)
-
-  //Delay is actually NOT in here anymore
-  //TODO:Fix naming
-  print_and_delay( text );
-  //Execute extra loop_antplus to clear the buffers
-  my_delay_function(DISPLAY_DURATION_MS, loop_antplus, CALL_LOOP_ANTPLUS_IN_SLEEP_PERIOD_MS );
-
-
-#if defined(USE_ANT)
-#if defined(USE_ANT_SDM)
-  //Make the final values stick
-  if(cumulative_distance > metres_today)
-  {
-    cumulative_distance = metres_today;
-  }
-  metres_left = metres_today - cumulative_distance;
-  if(metres_left < 0)
-  {
-    metres_left = 0;
-  }
-#endif //defined(USE_ANT_SDM)
-#endif //defined(USE_ANT)
-}
-
-
-
-// ******************************************************************************************************
 #if defined(USE_ANT)
 void loop_antplus()
 {
@@ -1996,6 +1977,61 @@ void loop_antplus()
 }
 #endif //defined(USE_ANT)
 
+// ******************************************************************************************************
+
+/*static*/ int loop_display_counter = 0;
+
+void loop_display()
+{
+
+
+  char text[MAX_CHARS_TO_DISPLAY_STR];
+
+  //SERIAL_DEBUG_PRINT( loop_display_counter );
+  //SERIAL_DEBUG_PRINT_F(" | ");
+  //SERIAL_DEBUG_PRINT( LOOP_TEXTS_COUNT );
+  //SERIAL_DEBUG_PRINT_F(" | ");
+  //SERIAL_DEBUG_PRINTLN( loop_display_counter % LOOP_TEXTS_COUNT );
+
+  //Pull a string from the loop texts
+  //These are one per loop() and some of them get replaced if they are magic texts
+  get_text_from_pm_char_ptr_array(text, MAX_CHARS_TO_DISPLAY_STR, loop_texts, LOOP_TEXTS_COUNT, loop_display_counter++);
+
+#define CALL_LOOP_ANTPLUS_IN_SLEEP_PERIOD_MS (1000)
+
+#if defined(USE_DISPLAY_EPAPER)
+#if defined(USE_LOGO)
+    if((logo_insert_counter++ % LOGO_INSERT_MESSAGE_COUNT) == 0)
+    {
+      print_epaper_logo();
+      //Execute extra loop_antplus to clear the buffers
+      my_delay_function(DISPLAY_DURATION_MS, loop_antplus, CALL_LOOP_ANTPLUS_IN_SLEEP_PERIOD_MS );
+    }
+#endif //defined(USE_LOGO)
+#endif //defined(USE_DISPLAY_EPAPER)
+
+  //Delay is actually NOT in here anymore
+  //TODO:Fix naming
+  print_and_delay( text );
+  //Execute extra loop_antplus to clear the buffers
+  my_delay_function(DISPLAY_DURATION_MS, loop_antplus, CALL_LOOP_ANTPLUS_IN_SLEEP_PERIOD_MS );
+
+
+#if defined(USE_ANT)
+#if defined(USE_ANT_SDM)
+  //Make the final values stick
+  if(cumulative_distance > metres_today)
+  {
+    cumulative_distance = metres_today;
+  }
+  metres_left = metres_today - cumulative_distance;
+  if(metres_left < 0)
+  {
+    metres_left = 0;
+  }
+#endif //defined(USE_ANT_SDM)
+#endif //defined(USE_ANT)
+}
 
 
 // **************************************************************************************************
