@@ -559,10 +559,6 @@ volatile byte rts_ant_received = 0; //!< ANT RTS interrupt flag see isr_rts_ant(
 /*static*/ char    adjusted_text[MAX_CHARS_TO_DISPLAY_STR];
 static uint8_t max_replace_text_len = 0;
 
-//#define BUFFER_PROTECTION //!< Some buffers to check when the afjusted text is written past the end
-#if defined(BUFFER_PROTECTION)
-/*static*/ char    adjusted_text_buffer_protection[40]; //Are we writing past the end of this????
-#endif //defined(BUFFER_PROTECTION)
 
 #if defined(USE_DISPLAY_7SEGMENT)
 /*static*/ boolean adjusted_text_decimals[MAX_CHARS_TO_DISPLAY];
@@ -1639,60 +1635,7 @@ void print_and_delay(const char * text)
 #endif //defined(USE_DISPLAY_7SEGMENT)
 
 #if defined(USE_DISPLAY_EPAPER)
-#if defined(BUFFER_PROTECTION)
-    static boolean clear_first_through = true;
-    if(clear_first_through)
-    {
-      //Reset
-      memset(adjusted_text_buffer_protection, 'B', sizeof(adjusted_text_buffer_protection)/sizeof(adjusted_text_buffer_protection[0]) );
-      clear_first_through = false;
-    }
-
-    //Check
-    SERIAL_DEBUG_PRINT_F("BuffProt:");
-    SERIAL_DEBUG_PRINT(__LINE__);
-    for (int i=0; i< sizeof(adjusted_text_buffer_protection)/sizeof(adjusted_text_buffer_protection[0]); i++ )
-    {
-      if(adjusted_text_buffer_protection[i] != 'B')
-      {
-        SERIAL_DEBUG_PRINT_F("[");
-        SERIAL_DEBUG_PRINT( i );
-        SERIAL_DEBUG_PRINT_F("]=");
-        SERIAL_DEBUG_PRINT( adjusted_text_buffer_protection[i] );
-        SERIAL_DEBUG_PRINT_F("/");
-        SERIAL_DEBUG_PRINT2( (unsigned char)adjusted_text_buffer_protection[i], HEX );
-      	SERIAL_DEBUG_PRINT_F(",");
-      }
-    }
-    SERIAL_DEBUG_PRINTLN();
-    //Reset
-    memset(adjusted_text_buffer_protection, 'B', sizeof(adjusted_text_buffer_protection)/sizeof(adjusted_text_buffer_protection[0]) );
-#endif //defined(BUFFER_PROTECTION)
-
     adjust_string( text, adjusted_text, sizeof(adjusted_text)/sizeof(adjusted_text[0]) );
-
-#if defined(BUFFER_PROTECTION)
-    //Check
-    SERIAL_DEBUG_PRINT_F("BuffProt:");
-    SERIAL_DEBUG_PRINT(__LINE__);
-    for (int i=0; i< sizeof(adjusted_text_buffer_protection)/sizeof(adjusted_text_buffer_protection[0]); i++ )
-    {
-      if(adjusted_text_buffer_protection[i] != 'B')
-      {
-        SERIAL_DEBUG_PRINT_F("[");
-        SERIAL_DEBUG_PRINT( i );
-        SERIAL_DEBUG_PRINT_F("]=");
-        SERIAL_DEBUG_PRINT( adjusted_text_buffer_protection[i] );
-        SERIAL_DEBUG_PRINT_F("/");
-        SERIAL_DEBUG_PRINT2( (unsigned char)adjusted_text_buffer_protection[i], HEX );
-      	SERIAL_DEBUG_PRINT_F(",");
-      }
-    }
-    SERIAL_DEBUG_PRINTLN();
-    //Reset
-    memset(adjusted_text_buffer_protection, 'B', sizeof(adjusted_text_buffer_protection)/sizeof(adjusted_text_buffer_protection[0]) );
-#endif //defined(BUFFER_PROTECTION)
-
     print_epaper( adjusted_text );
 #endif //defined(USE_DISPLAY_EPAPER)
 }
