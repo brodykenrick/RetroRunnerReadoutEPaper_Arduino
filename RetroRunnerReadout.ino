@@ -1,10 +1,5 @@
 
 
-//*****************************************************************************
-//**************************** <INCLUDES> *************************************
-#include "RetroRunnerReadout.h"
-
-
 /* Retro Runner Readout
 http://retrorunnerreadout.blogspot.com
 Copyright 2013 Brody Kenrick.
@@ -51,22 +46,32 @@ DisplayEP
 TBD
 */
 
+//**************************** <INCLUDES> *************************************
+#include "RetroRunnerReadout.h"
+
+
 #include <Arduino.h>
 
-#define NDEBUG
+//#define NDEBUG
 #define __ASSERT_USE_STDERR
 #include <assert.h>
 
-//#define USE_DISPLAY_7SEGMENT
-#define USE_DISPLAY_EPAPER
-#define USE_LOGO
-#define USE_ANT
+#define USE_DISPLAY_EPAPER      //!<Use the E-Paper display for outputting messages.
+//#define USE_DISPLAY_7SEGMENT  //!<Use the 7-segment display for outputting messages. Note -- there are issues with this as the code has been shifted to E-Paper
+#define USE_LOGO                //!<Insert a graphical logo.
+#define USE_ANT                 //!<Enable ANT operation (for Garmin HRM or SDM)
 
-//Only one of these....
-//#define USE_ANT_HRM
-#define USE_ANT_SDM
+//NOTE: Only one of these....
+//#define USE_ANT_HRM   //!< Use ANT+ Heart Rate Monitor (Garmin cheststrap)
+#define USE_ANT_SDM     //!< Use ANT+ Heart Rate Monitor (Garmin footpod)
 
+#define USE_SERIAL_CONSOLE //!<Use the hardware serial as the console. This needs to be off if using hardware serial for driving the ANT+ module.
+#define CONSOLE_BAUD_RATE (115200)
 
+//#define DEBUG_MODE //<! A debugging mode that does some things including making the strings displayed sequential (instead of random).
+//#define DEBUG_OVERLAY //<! For e-paper overlay a few text/stats on each text screen
+
+//This allows us to save a fair bit of SRAM and program space as we can avoid including the Wire/TWI stuff.
 //#define EPAPER_HARDCODED_TEMP_CELSIUS (21)
 
 
@@ -106,14 +111,13 @@ TBD
 #include <Adafruit_GFX.h>
 
 
-
 // Change this for different display size
 // supported sizes: 144 200 270
 //#define SCREEN_SIZE 0
 #define SCREEN_SIZE 270 //BK
 
 
-#define CANTOO_LOGO_SUBSAMPLED
+#define CANTOO_LOGO_SUBSAMPLED        //!< Use a vert. and height subsampled image to save PROGMEM
 #define LOGO_INSERT_MESSAGE_COUNT (8) //!< Each X messages we insert the logo.
 
 #if defined(CANTOO_LOGO_SUBSAMPLED)
@@ -164,12 +168,10 @@ TBD
 //Note: This include is affected by EMBEDDED_ARTISTS define
 #include <EPD_GFX.h>
 
-//! Height in pixels of each segment in the EPD buffer. Proportional to the memory used and inversely proportional to processing to display. Also has visual impact and adds some delay in rendering.
+//! Height in pixels of each segment in the EPD buffer. Proportional to the SRAM used and inversely proportional to processing to display. Also has visual impact and adds some delay in rendering.
 //!If your Arduino hangs at startup reduce this (BUT must be a factor of the screen size -- you can start with 1).
-//#define HEIGHT_OF_SEGMENT (11)
-//#define HEIGHT_OF_SEGMENT (4)
 //#define HEIGHT_OF_SEGMENT (8)
-//#define HEIGHT_OF_SEGMENT (16)
+//#define HEIGHT_OF_SEGMENT (11)
 #define HEIGHT_OF_SEGMENT (22)
 
 // pre-processor convert to string
@@ -202,14 +204,6 @@ TBD
 #include <ANTPlus.h>
 #endif //defined(USE_ANT)
 
-#define USE_SERIAL_CONSOLE //!<Use the hardware serial as the console. This needs to be off if using hardware serial for driving the ANT+ module.
-#define CONSOLE_BAUD_RATE (115200)
-
-//#define DEBUG_MODE //<! A debugging mode that does some things including making the strings displayed sequential (instead of random).
-
-//#define DEBUG_OVERLAY //<! For e-paper overlay a few text/stats on each text screen
-
-
 
 #if defined(USE_DISPLAY_7SEGMENT)
 #define DISPLAY_DURATION_MS (1200)  //!< This is the display time for 8 characters. Scrolling takes longer (not quite linear increase).
@@ -230,7 +224,6 @@ TBD
 #define DISPLAY_DURATION_STARTUP_MS (DISPLAY_DURATION_MS/3)  //!< This is the time we pause with content on the screen.
 
 #else
-//FIXME
 
 #define DISPLAY_DURATION_MS (3 * 1000)  //!< This is the time we pause with content on the screen.
 #define DISPLAY_DURATION_STARTUP_MS (DISPLAY_DURATION_MS/3)  //!< This is the time we pause with content on the screen.
@@ -248,8 +241,8 @@ TBD
 //********************************************************************
 
 #define SERIAL_DEBUG
-//#define SERIAL_DEVDEBUG
-//#define SERIAL_DEVDEBUG_FLUSH//!<Flush after each write
+//#define SERIAL_DEVDEBUG       //!<Extra debug messages
+//#define SERIAL_DEVDEBUG_FLUSH //!<Flush after each write (in case we are looking for a crash -- oh for a step through debugger)
 #define SERIAL_INFO
 #define SERIAL_WARNING
 
@@ -338,7 +331,7 @@ TBD
 
 
 //Special strings that will be replaced when encountered.
-//#define PRE_NAME_REPLACE        ("PNAME_REP")
+//#define PRE_NAME_REPLACE        ("PNAME_REP") //Not used in e-paper
 #define NAME_REPLACE            ("NAME_REP")
 #define MOTIVATE_REPLACE        ("MOTV_REP")
 #define DISTANCE_TODAY_REPLACE  ("TODAY_REP")
@@ -378,7 +371,7 @@ TBD
 #define MAX_CHARS_TO_DISPLAY (70)
 #define MAX_CHARS_TO_DISPLAY_STR (MAX_CHARS_TO_DISPLAY+1) //'\0' terminated
 
-#define ANTPLUS_BAUD_RATE (9600) //!< The moduloe I am using is hardcoded to this baud rate.
+#define ANTPLUS_BAUD_RATE (9600) //!< The module I am using is hardcoded to this baud rate.
 
 
 #if defined(USE_ANT)
@@ -417,13 +410,13 @@ TBD
 
 
 // EPaper Arduino IO layout
-static const byte Pin_PANEL_ON  = A2;//2;
-static const byte Pin_BORDER    = A3;//3;
+static const byte Pin_PANEL_ON  = A2;//2; //Moved from the "normal" pin
+static const byte Pin_BORDER    = A3;//3; //Moved from the "normal" pin
 static const byte Pin_DISCHARGE = 4;
 static const byte Pin_PWM       = 5;
 static const byte Pin_RESET     = 6;
 static const byte Pin_BUSY      = 7;
-static const byte Pin_EPD_CS    = 10;//8; //Move out of way of 8,9 for softserial?
+static const byte Pin_EPD_CS    = 10;//8; //Moved from the "normal" pin
 //static const byte Pin_RED_LED   = 13; //Disconnect this??? -- Can't needs to be plugged in - SPI used
 //Also A5, A4 - SDA/SCL
 
@@ -431,11 +424,12 @@ static const byte Pin_EPD_CS    = 10;//8; //Move out of way of 8,9 for softseria
 
 
 #if defined(USE_ANT)
-//ANTPlus -- NOTE: Changes from default pins
-//A0   //4/*SLEEP*/
-//A1   //5/*RESET*/
+//ANTPlus
+//A0   //4/*SLEEP*/ //Moved from the "normal" pin
+//A1   //5/*RESET*/ //Moved from the "normal" pin
 /*static*/ ANTPlus        antplus   = ANTPlus(RTS_PIN, 3/*SUSPEND*/, A0/*SLEEP*/, A1/*RESET*/ );
 #endif //!defined(USE_ANT)
+
 #if defined(USE_DISPLAY_7SEGMENT)
 /*static*/ LedControl     mydisplay = LedControl(11/*DIN:MOSI*/, 13/*CLK:SCK*/, 10/*CS:SS*/, 1/*Device count*/);
 #endif //defined(USE_DISPLAY_7SEGMENT)
@@ -443,11 +437,13 @@ static const byte Pin_EPD_CS    = 10;//8; //Move out of way of 8,9 for softseria
 
 #if defined(USE_DISPLAY_EPAPER)
 EPD_Class EPD(EPD_SIZE, Pin_PANEL_ON, Pin_BORDER, Pin_DISCHARGE, Pin_PWM, Pin_RESET, Pin_BUSY, Pin_EPD_CS);
+
 #if !defined(EPAPER_HARDCODED_TEMP_CELSIUS)
 LM75A_Class LM75A;
 #endif //defined(EPAPER_HARDCODED_TEMP_CELSIUS)
+
 // Graphic handler
-//TODO: Move this into setup/loop so that we can create a visible error if we run out of memory
+//TODO: Move this into setup/loop so that we can create a visible error if we run out of memory (it does malloc).
 EPD_GFX G_EPD(EPD, EPD_WIDTH, EPD_HEIGHT,
 #if defined(EPAPER_HARDCODED_TEMP_CELSIUS)
 EPAPER_HARDCODED_TEMP_CELSIUS,
@@ -560,10 +556,10 @@ volatile byte rts_ant_received = 0; //!< ANT RTS interrupt flag see isr_rts_ant(
 #endif //defined(USE_ANT)
 
 //Used in setup and then in loop -- save stack on this big variable by using globals
-/*static*/ char    adjusted_text[MAX_CHARS_TO_DISPLAY_STR]; //Are we writing past the end of this????
+/*static*/ char    adjusted_text[MAX_CHARS_TO_DISPLAY_STR];
 static uint8_t max_replace_text_len = 0;
 
-//#define BUFFER_PROTECTION
+//#define BUFFER_PROTECTION //!< Some buffers to check when the afjusted text is written past the end
 #if defined(BUFFER_PROTECTION)
 /*static*/ char    adjusted_text_buffer_protection[40]; //Are we writing past the end of this????
 #endif //defined(BUFFER_PROTECTION)
@@ -626,7 +622,7 @@ PROGMEM const char * const startup_texts[] =
 
 // ****************************************************************************
 
-//const char loop_text_00[] PROGMEM         = "CanToo";
+//const char loop_text_00[] PROGMEM         = "CanToo"; //We use the logo instead
 const char loop_text_00a[] PROGMEM        = "Cure\nCancer";
 const char loop_text_TODAY[] PROGMEM         = DISTANCE_TODAY_REPLACE;
 //const char loop_text_PRE_NAME[] PROGMEM   = PRE_NAME_REPLACE;
@@ -2158,16 +2154,14 @@ void setup()
 // ************************************  Loop *******************************************************
 // **************************************************************************************************
 
-//#define SKIP_ANT_LOOP //!<Keep ANT in but remove it from locking us out.
-
 void loop()
 {
-#if defined(USE_ANT) && !defined(SKIP_ANT_LOOP)
+#if defined(USE_ANT)
   loop_antplus();
 #endif //defined(USE_ANT)
 
   boolean channels_to_setup_established = true;
-#if defined(USE_ANT)  && !defined(SKIP_ANT_LOOP)
+#if defined(USE_ANT)
   //Get the ANT+ channels up quickly
   for(byte i=0; i < ANT_DEVICE_NUMBER_CHANNELS; i++)
   {
