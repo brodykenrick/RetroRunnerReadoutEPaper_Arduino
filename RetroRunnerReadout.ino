@@ -67,7 +67,7 @@ TBD
 #define USE_ANT_SDM
 
 
-#define EPAPER_HARDCODED_TEMP_CELSIUS (21)
+//#define EPAPER_HARDCODED_TEMP_CELSIUS (21)
 
 
 //#define USE_NARCOLEPTIC_DELAY //<! Use Narcoleptic to save battery with power down sleep (vs. busy delay())
@@ -98,9 +98,9 @@ TBD
 
 #if !defined(EPAPER_HARDCODED_TEMP_CELSIUS)
 //Temperature sensor
-//#include <Wire.h>
-//#include <LM75A.h>
-#error "If you want this uncomment it: Commented this include as defines don't stop the Arduino IDE"
+#include <Wire.h>
+#include <LM75A.h>
+//#error "If you want this uncomment it: Commented this include as defines don't stop the Arduino IDE"
 #endif //defined(EPAPER_HARDCODED_TEMP_CELSIUS)
 
 #include <Adafruit_GFX.h>
@@ -113,13 +113,15 @@ TBD
 #define SCREEN_SIZE 270 //BK
 
 
-//#define CANTOO_LOGO_SUBSAMPLED
+#define CANTOO_LOGO_SUBSAMPLED
 #define LOGO_INSERT_MESSAGE_COUNT (8) //!< Each X messages we insert the logo.
 
 #if defined(CANTOO_LOGO_SUBSAMPLED)
 #define IMAGE_CANTOO_LOGO  CanToo_bw_sample_h2_v2
+#define CANTOO_LOGO_SUBSAMPLED_PARAM (true)
 #else
 #define IMAGE_CANTOO_LOGO  CanToo_bw
+#define CANTOO_LOGO_SUBSAMPLED_PARAM (false)
 #endif //defined(CANTOO_LOGO_SUBSAMPLED)
 
 #if (SCREEN_SIZE == 144)
@@ -1397,9 +1399,9 @@ void print_epaper_draw_chars( const char * text,
 
   //TODO: Make this cleaner -- it is close to centre but not exact
   //+1 char -- we use padding of half a char on sides
-  const unsigned int char_size_multiplier_width  = width /  ((max_line_length + 1) * (EPD_GFX_CHAR_BASE_WIDTH  + 1));
+  const unsigned int char_size_multiplier_width  = width /  ((max_line_length + 1) * (EPD_GFX_CHAR_PADDED_WIDTH));
   //+1 char -- we use padding of half a char on top and bottom
-  const unsigned int char_size_multiplier_height = height / ((num_lines + 1)       * (EPD_GFX_CHAR_BASE_HEIGHT + 1));
+  const unsigned int char_size_multiplier_height = height / ((num_lines + 1)       * (EPD_GFX_CHAR_PADDED_HEIGHT));
 //  SERIAL_DEBUG_PRINT_F("csm_w=");
 //  SERIAL_DEBUG_PRINT( char_size_multiplier_width );
 //  SERIAL_DEBUG_PRINT_F(" | csm_h=");
@@ -1472,31 +1474,7 @@ void print_epaper_draw_chars( const char * text,
       //SERIAL_DEBUG_PRINT_F(",");
       //SERIAL_DEBUG_PRINT( y );
       //SERIAL_DEBUG_PRINT_F("]");
-
-      //Optimise out a few calls to save wasted processing for non-displaying segments
-      const unsigned int y_end_char = y + char_size_multiplier * (EPD_GFX_CHAR_BASE_HEIGHT + 1);
-      const unsigned int segment_end_row = segment_start_row + segment_num_rows;
-      boolean draw_char = true;
-      if(y > segment_end_row)
-      {
-    	  //Char starts on a later segment
-    	  draw_char = false;
-      }
-      if(y_end_char < segment_start_row)
-	  {
-    	  //Char finished on an earlier segment
-		  draw_char = false;
-	  }
-
-      if(draw_char)
-      {
-    	  G_EPD.drawChar(x, y, text[j], EPD_GFX::BLACK, EPD_GFX::WHITE, char_size_multiplier );
-      }
-      else
-      {
-    	  //Skipping this char...
-      }
-
+      G_EPD.drawChar(x, y, text[j], EPD_GFX::BLACK, EPD_GFX::WHITE, char_size_multiplier );
       x += (char_size_multiplier * (EPD_GFX_CHAR_BASE_WIDTH + 1));
     }
     //SERIAL_DEBUG_PRINTLN_F(".");
@@ -1508,14 +1486,9 @@ void print_epaper_draw_chars( const char * text,
 #if defined(USE_LOGO)
 void print_epaper_logo( )
 {
-  	SERIAL_INFO_PRINTLN_F("Logo");
-      	G_EPD.clear( );
-
-#if defined(CANTOO_LOGO_SUBSAMPLED)
-       G_EPD.drawBitmapFastSubsampleBy2( IMAGE_CANTOO_LOGO_BITS );
-#else
-       G_EPD.drawBitmapFast( IMAGE_CANTOO_LOGO_BITS );
-#endif //defined(CANTOO_LOGO_SUBSAMPLED)
+  SERIAL_INFO_PRINTLN_F("Logo");
+  G_EPD.clear( );
+  G_EPD.drawBitmapFast( IMAGE_CANTOO_LOGO_BITS, CANTOO_LOGO_SUBSAMPLED_PARAM );
 }
 #endif //defined(USE_LOGO)
 #endif //defined(USE_DISPLAY_EPAPER)
@@ -1533,7 +1506,7 @@ void print_epaper_debug_time(int x, int y)
 //              strcat (temp,"]");
       strcat (temp,"s");
 #else
-      //This takes more space.....
+      //This takes more progmem.....
       sprintf (temp, "Time=%ls", millis()/1000 );
 #endif
       for (unsigned int j = 0; j < strlen(temp); ++j)
