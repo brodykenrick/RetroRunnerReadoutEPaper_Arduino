@@ -4,9 +4,9 @@
 http://retrorunnerreadout.blogspot.com
 Copyright 2013 Brody Kenrick.
 
-Interfacing of Garmin ANT+ device (via a cheap Nordic nRF24AP UART module) to an Arduino and an 8 character 7-segment display module (using MAX7219).
+Interfacing of Garmin ANT+ device (via a cheap Nordic nRF24AP UART module) to an Arduino and a display module. The display module in this version to be an E-Paper panel from Embedded Artists ().
 
-The code runs through a loop of strings. Each of these are displayed on the 7-segment display. Some of these
+The code runs through a loop of strings. Each of these are displayed on the display. Some of these
 strings are dynamically replaced with other strings. The dynamic strings consist of different groups. Some are
 names of friends/supporters. Others are motivational/funny quotes. A further group are information about the run
 taking place -- these include distance expected today, distance so far today, distance left, strides taken, current
@@ -17,7 +17,7 @@ Hardware
 An Arduino Pro Mini 3v3
 This nRF24AP2 module : http://www.goodluckbuy.com/nrf24ap2-networking-module-zigbee-module-with-ant-transceiver-.html
 
-Either Display7S:
+One of two displays. Either Display7S:
 This 7-segment display : http://dx.com/p/8-segment-led-display-board-module-for-arduino-147814
 Batteries, a 5V regulator and a level converter (http://www.freetronics.com/products/logic-level-converter-module)
 
@@ -43,12 +43,28 @@ MAX7219/7221 -> Arduino:Pin
 Wiring to the Arduino Pro Mini 3v3 can be seen in 'mydisplay' below.
 
 DisplayEP
-TBD
+http://www.embeddedartists.com/products/displays/lcd_27_epaper.php
+
+Wiring to the Arduino Pro Mini 3v3 can be seen in 'EPD_GFX' below.
+
+Use the wiring connection guide in:
+http://www.embeddedartists.com/sites/default/files/support/displays/epaper/Epaper_arduino.pdf
+
+Pin_PANEL_ON  = A2;//2; //Moved from the "normal" pin
+Pin_BORDER    = A3;//3; //Moved from the "normal" pin
+Pin_DISCHARGE = 4;
+Pin_PWM       = 5;
+Pin_RESET     = 6;
+Pin_BUSY      = 7;
+Pin_EPD_CS    = 10;//8; //Moved from the "normal" pin
+Pin_RED_LED   = 13; //Also SPI pin
+
+SPI used 13,11,12,A5, A4 - SCK, MOSI, MISO,SDA,SCL
+
 */
 
 //**************************** <INCLUDES> *************************************
 #include "RetroRunnerReadout.h"
-
 
 #include <Arduino.h>
 
